@@ -14,10 +14,14 @@ public final class ExchangeTracker {
     public static String icon = "";
 
     private static int tick = 0;
-    private static int lastSendTick = Integer.MIN_VALUE;
+    private static int lastSendTick = -AUTO_INTERVAL_TICKS;
     private static int suppressTicksLeft = 0;
 
     private ExchangeTracker() {
+    }
+
+    public static int tickCount() {
+        return tick;
     }
 
     public static void tick() {
