@@ -2,8 +2,6 @@ package com.pirs.coinrate;
 
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import net.fabricmc.api.ClientModInitializer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -11,17 +9,19 @@ import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.class_2561;
 import net.minecraft.class_2583;
+import net.minecraft.class_310;
 import net.minecraft.class_5250;
 
 public class CoinRateClient implements ClientModInitializer {
 
     private static final int GRAY = 0x808080;
 
-    private static final Pattern PRICE_NUM = Pattern.compile("\\d+(?:[.,]\\d+)*");
     private static final String[] RUBLE_MARKERS = { "₽", "руб", "руб.", "rub", "рубли", "рублей" };
+    private static final String[] PRICE_KEYWORDS = { "цена", "price", "стоим" };
 
     @Override
     public void onInitializeClient() {
+        Debug.log("CoinRate initialized");
         ClientTickEvents.END_CLIENT_TICK.register(client -> {
             ExchangeTracker.tick();
             if (!ExchangeTracker.shouldSend()) {
@@ -31,6 +31,7 @@ public class CoinRateClient implements ClientModInitializer {
                 return;
             }
             ExchangeTracker.markSent();
+            Debug.log("sending /exchange");
             client.method_1562().method_45730("/exchange");
         });
 
@@ -44,17 +45,26 @@ public class CoinRateClient implements ClientModInitializer {
     }
 
     private static void addCoinTooltip(List<class_2561> lines) {
-        if (ExchangeTracker.rate <= 0 || lines == null || lines.isEmpty()) {
+        if (lines == null || lines.isEmpty()) {
             return;
         }
+        boolean rateKnown = ExchangeTracker.rate > 0;
+        boolean inScreen = class_310.method_1551().field_1729 != null;
         Price price = findPrice(lines);
-        if (price == null) {
-            return;
+        Debug.log("tooltip lines=" + lines.size() + " screen=" + inScreen + " rateKnown=" + rateKnown
+                + " price=" + (price == null ? "-" : price.value + (price.inCoins ? " coins" : " rub")));
+
+        boolean showRate = rateKnown && (price != null || (inScreen && lines.size() > 1));
+        if (showRate) {
+            lines.add(gray("Курс койна: " + fmt(ExchangeTracker.rate) + iconSuffix()));
         }
-        double coins = price.inCoins ? price.value : price.value / ExchangeTracker.rate;
-        String iconSuffix = ExchangeTracker.icon.isEmpty() ? "" : " " + ExchangeTracker.icon;
-        lines.add(gray("Курс койна: " + fmt(ExchangeTracker.rate) + iconSuffix));
-        lines.add(gray("Цена в койнах: " + fmt(coins) + iconSuffix));
+        if (price != null) {
+            if (price.inCoins) {
+                lines.add(gray("Цена в койнах: " + fmt(price.value) + iconSuffix()));
+            } else if (rateKnown) {
+                lines.add(gray("Цена в койнах: " + fmt(price.value / ExchangeTracker.rate) + iconSuffix()));
+            }
+        }
     }
 
     private static Price findPrice(List<class_2561> lines) {
@@ -77,8 +87,17 @@ public class CoinRateClient implements ClientModInitializer {
                     return new Price(n, false);
                 }
             }
+            for (String keyword : PRICE_KEYWORDS) {
+                if (lower.contains(keyword)) {
+                    return new Price(n, false);
+                }
+            }
         }
         return null;
+    }
+
+    private static String iconSuffix() {
+        return ExchangeTracker.icon.isEmpty() ? "" : " " + ExchangeTracker.icon;
     }
 
     private static class Price {

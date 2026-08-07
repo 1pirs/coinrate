@@ -8,7 +8,6 @@ public final class ExchangeTracker {
 
     private static final int SUPPRESS_WINDOW_TICKS = 200;
 
-    private static final Pattern RATE_PATTERN = Pattern.compile("(?i)Курс[^0-9]*([0-9]+(?:[.,][0-9]+)?)");
     private static final Pattern NUMBER_PATTERN = Pattern.compile("[0-9]+(?:[.,][0-9]+)*");
 
     public static double rate = -1.0;
@@ -37,34 +36,36 @@ public final class ExchangeTracker {
         suppressTicksLeft = SUPPRESS_WINDOW_TICKS;
     }
 
-    public static boolean isSuppressing() {
-        return suppressTicksLeft > 0;
-    }
-
     public static boolean onReceive(String plain) {
         if (plain == null || plain.isEmpty()) {
             return false;
         }
+        boolean relevant = isExchangeRelated(plain);
         parse(plain);
-        return isExchangeRelated(plain) && suppressTicksLeft > 0;
+        boolean suppress = relevant && suppressTicksLeft > 0;
+        if (relevant) {
+            Debug.log("RECV " + (suppress ? "[suppressed] " : "") + plain.replace('\n', '|'));
+        }
+        return suppress;
     }
 
     private static void parse(String s) {
         String lower = s.toLowerCase();
-        boolean rateLine = s.contains("Курс") && (lower.contains("коин") || lower.contains("койн"));
-        if (rateLine) {
-            Matcher m = RATE_PATTERN.matcher(s);
-            if (m.find()) {
-                double r = parseNumber(m.group(1));
-                if (r > 0) {
-                    rate = r;
-                }
+        boolean hasRateWord = lower.contains("курс") || lower.contains("обмен") || lower.contains("exchange")
+                || (lower.contains("коин") && lower.contains("="))
+                || (lower.contains("койн") && lower.contains("="));
+        if (hasRateWord) {
+            double r = parseRate(s);
+            if (r > 0) {
+                rate = r;
+                Debug.log("rate=" + r);
             }
         }
         if (lower.contains("коин") || lower.contains("койн") || lower.contains("баланс") || lower.contains("обмен")) {
             String ic = extractIcon(s);
-            if (ic != null && !ic.isEmpty()) {
+            if (ic != null && !ic.isEmpty() && !ic.equals(icon)) {
                 icon = ic;
+                Debug.log("icon=" + icon);
             }
         }
     }
@@ -73,6 +74,24 @@ public final class ExchangeTracker {
         String lower = s.toLowerCase();
         return lower.contains("курс") || lower.contains("коин") || lower.contains("койн")
                 || lower.contains("баланс") || lower.contains("обмен") || lower.contains("exchange");
+    }
+
+    private static double parseRate(String s) {
+        int eq = s.indexOf('=');
+        if (eq >= 0) {
+            Matcher m = NUMBER_PATTERN.matcher(s.substring(eq + 1));
+            if (m.find()) {
+                double v = normalize(m.group());
+                if (v > 0) {
+                    return v;
+                }
+            }
+        }
+        Matcher m = NUMBER_PATTERN.matcher(s);
+        if (m.find()) {
+            return normalize(m.group());
+        }
+        return -1;
     }
 
     private static String extractIcon(String s) {
