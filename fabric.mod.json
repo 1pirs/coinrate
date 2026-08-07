@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "id": "coinrate",
+  "version": "1.0.0",
+  "name": "Coin Rate Tooltip",
+  "description": "Курс койна и цена предметов в койнах на аукционе",
+  "authors": [
+    "1pirs"
+  ],
+  "license": "MIT",
+  "environment": "client",
+  "entrypoints": {
+    "client": [
+      "com.pirs.coinrate.CoinRateClient"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.0",
+    "minecraft": ">=1.21.4",
+    "fabric-api": "*"
+  }
+}
